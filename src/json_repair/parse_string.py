@@ -781,7 +781,7 @@ def _scan_string_body(
                         if next_c and next_c != ":":
                             rstring_delimiter_missing = False
             else:
-                i = self.skip_to_character(character=":", idx=1)
+                i = _cached_skip_to_character(self, state, ":", idx=1)
                 next_c = self.get_char_at(i)
                 if next_c:
                     break
@@ -800,7 +800,7 @@ def _scan_string_body(
             and ContextValues.ARRAY in self.context.context
             and (not state.string_acc or state.string_acc[-1] != outer_rstring_delimiter)
         ):
-            i = self.skip_to_character(outer_rstring_delimiter)
+            i = _cached_skip_to_character(self, state, outer_rstring_delimiter)
             if not self.get_char_at(i):
                 break
         if self.context.current == ContextValues.OBJECT_VALUE and char == "}":

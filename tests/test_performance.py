@@ -34,6 +34,10 @@ mixed_quote_object_string_fragments = _unclosed_object_string_payload(
 far_quote_comma_object_string_fragments = '{"a": "' + ("x," * 10_000) + '" tail'
 far_quote_brace_object_string_fragments = '{"a": "' + ("x}" * 5_000) + '" tail'
 unclosed_object_string_escaped_newlines = '{"a": "' + ("x\\n" * 5_000)
+array_object_string_with_many_brackets = (
+    '[{"answer": "' + ("Paris is the capital of France [1] and Lyon is big [2].\\n" * 800) + '"},]'
+)
+unclosed_object_string_with_many_braces = '{"a": "' + ("text } more " * 3_000)
 
 schema_perf = {
     "type": "array",
@@ -174,3 +178,23 @@ def test_schema_repair_performance(
     assert benchmark.stats is not None
     median_time = benchmark.stats.get("median")
     assert median_time < max_time, f"Benchmark exceeded threshold: {median_time:.6f}s > {max_time:.6f}s"
+
+
+@pytest.mark.skipif(CI, reason="Performance tests are skipped in CI")
+def test_array_object_string_with_many_brackets() -> None:
+    start = time.perf_counter()
+    repair_json(array_object_string_with_many_brackets, return_objects=True)
+    elapsed = time.perf_counter() - start
+
+    max_time = 250 / 10**3  # 250 millisecond
+    assert elapsed < max_time, f"Performance regression: {elapsed:.3f}s > {max_time:.3f}s"
+
+
+@pytest.mark.skipif(CI, reason="Performance tests are skipped in CI")
+def test_unclosed_object_string_with_many_braces() -> None:
+    start = time.perf_counter()
+    repair_json(unclosed_object_string_with_many_braces, return_objects=True, skip_json_loads=True)
+    elapsed = time.perf_counter() - start
+
+    max_time = 1  # 1 second
+    assert elapsed < max_time, f"Performance regression: {elapsed:.3f}s > {max_time:.3f}s"
