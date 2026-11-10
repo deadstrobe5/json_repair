@@ -94,6 +94,8 @@ class JSONParser:
         self.has_tried_valid_json_suffix = False
         self._last_parse_found_value = False
         self.schema_repairer: SchemaRepairer | None = None
+        # Row lengths already checked in the list that table-row continuations keep appending to.
+        self.row_length_scan: tuple[list[JSONReturnType], int, int | None, bool] | None = None
 
     def parse(
         self,

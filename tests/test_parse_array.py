@@ -48,6 +48,15 @@ def test_parse_array_edge_cases() -> None:
     assert repair_json("{'key1', 'key2'}") == '["key1", "key2"]'
 
 
+def test_parse_array_table_row_continuations_track_row_lengths() -> None:
+    # Each continuation row is merged by a separate call; a row with another length must stop row grouping later on.
+    raw = '{"rows": [["a", "b"], "c", "d"], ["e", "f"], ["g", "h", "i"], ["j", "k"]]}'
+
+    assert repair_json(raw, return_objects=True) == {
+        "rows": [["a", "b"], ["c", "d"], ["e", "f"], ["g", "h", "i"], "j", "k"],
+    }
+
+
 def test_parse_array_closes_before_object_member_after_scalar_items() -> None:
     raw = '{"outer": ["a", "b", "next": "value"}'
 
