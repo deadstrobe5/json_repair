@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
@@ -15,6 +16,8 @@ NO_DIRECT_RESULT = object()
 INLINE_CONTAINER_CLOSING_DELIMITERS = {"[": "]", "{": "}", "(": ")"}
 INLINE_CONTAINER_OPENERS = tuple(INLINE_CONTAINER_CLOSING_DELIMITERS)
 LOW_SMART_QUOTE_SENTINEL = "\0"
+# Characters that no string-body heuristic reacts to, so a run of them can be copied at once.
+PLAIN_STRING_RUN = re.compile(r"[^\"'\\„“”{}\[\](),:`]+")
 
 
 @dataclass
@@ -23,7 +26,8 @@ class StringParseState:
     doubled_quotes: bool = False
     lstring_delimiter: str = '"'
     rstring_delimiter: str = '"'
-    string_acc: str = ""
+    # Characters are collected in a list because appending to a str attribute copies it every time.
+    string_acc: list[str] = field(default_factory=list)
     unmatched_delimiter: bool = False
     pending_inline_container: bool = False
     inline_container_stack: list[str] = field(default_factory=list)
@@ -115,7 +119,7 @@ def _append_literal_char(
 
 def _append_string_content(state: StringParseState, content: str) -> None:
     start_index = len(state.string_acc)
-    state.string_acc += content
+    state.string_acc.extend(content)
     for offset, char in enumerate(content):
         if char == "{":
             state.object_value_unmatched_opening_braces += 1
@@ -142,7 +146,7 @@ def _quote_belongs_to_regex_character_class(
 
 def _replace_trailing_backslash(state: StringParseState, content: str) -> None:
     # A backslash never changes the brace/bracket state, so only the replacement needs scanning.
-    state.string_acc = state.string_acc[:-1]
+    state.string_acc.pop()
     _append_string_content(state, content)
 
 
@@ -825,10 +829,18 @@ def _scan_string_body(
         assert char is not None
         _append_string_content(state, char)
         self.index += 1
+        if (
+            char != "\\"
+            and not (state.missing_quotes and self.context.current == ContextValues.OBJECT_KEY)
+            and isinstance(self.json_str, str)
+            and (plain_run := PLAIN_STRING_RUN.match(self.json_str, self.index))
+        ):
+            state.string_acc.extend(plain_run.group())
+            self.index = plain_run.end()
         char = self.get_char_at()
         if char is None:
             if self.stream_stable and state.string_acc and state.string_acc[-1] == "\\":
-                state.string_acc = state.string_acc[:-1]
+                state.string_acc.pop()
             break
         if state.string_acc and state.string_acc[-1] == "\\":
             handled_escape, char = _normalize_escape_sequence(self, state, char)
@@ -894,19 +906,20 @@ def _finalize_string_result(
         if self.get_char_at() not in [":", ","]:
             return ""
 
+    string_acc = "".join(state.string_acc)
     if char != outer_rstring_delimiter:
         if not self.stream_stable:
             self.log(
                 "While parsing a string, we missed the closing quote, ignoring",
             )
-            state.string_acc = state.string_acc.rstrip()
+            string_acc = string_acc.rstrip()
     else:
         self.index += 1
 
-    if not self.stream_stable and (state.missing_quotes or (state.string_acc and state.string_acc[-1] == "\n")):
-        state.string_acc = state.string_acc.rstrip()
+    if not self.stream_stable and (state.missing_quotes or (string_acc and string_acc[-1] == "\n")):
+        string_acc = string_acc.rstrip()
 
-    return state.string_acc
+    return string_acc
 
 
 def parse_string(self: "JSONParser") -> JSONReturnType:

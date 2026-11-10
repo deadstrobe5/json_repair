@@ -656,24 +656,24 @@ def test_update_inline_container_stack_keeps_closing_container_character() -> No
 def test_scan_string_body_keeps_closing_inline_container_character() -> None:
     parser = JSONParser(']"', None, False)
     parser.context.set(ContextValues.OBJECT_VALUE)
-    state = StringParseState(string_acc="x", inline_container_stack=["["])
+    state = StringParseState(string_acc=list("x"), inline_container_stack=["["])
 
     char = _scan_string_body(parser, state)
 
     assert char == '"'
-    assert state.string_acc == "x]"
+    assert "".join(state.string_acc) == "x]"
     assert state.inline_container_stack == []
 
 
 def test_scan_string_body_closes_low_smart_quote_span_with_unicode_quote() -> None:
     parser = JSONParser('”"', None, False)
     parser.context.set(ContextValues.OBJECT_VALUE)
-    state = StringParseState(rstring_delimiter='"\0', string_acc="prefix")
+    state = StringParseState(rstring_delimiter='"\0', string_acc=list("prefix"))
 
     char = _scan_string_body(parser, state)
 
     assert char == '"'
-    assert state.string_acc == "prefix”"
+    assert "".join(state.string_acc) == "prefix”"
     assert state.rstring_delimiter == '"'
 
 
