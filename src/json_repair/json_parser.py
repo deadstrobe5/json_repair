@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Callable
 from contextlib import ExitStack
 from typing import TYPE_CHECKING, Any, TextIO
@@ -17,6 +18,10 @@ from .utils.string_file_wrapper import StringFileWrapper
 
 if TYPE_CHECKING:
     from .schema_repair import SchemaRepairer
+
+# Characters that parse_json reacts to at the top level; any other character is skipped.
+TOP_LEVEL_VALUE_START = re.compile(r"[{\[(#/]")
+TOP_LEVEL_VALUE_OR_QUOTE_START = re.compile(r"[{\[(#/\"'“”]")
 
 
 class JSONParser:
@@ -356,6 +361,11 @@ class JSONParser:
                     )
             # If everything else fails, we just ignore and move on
             self.index += 1
+            if self.context.empty and isinstance(self.json_str, str):
+                # Jump over text that cannot start a value, such as prose before a JSON block.
+                pattern = TOP_LEVEL_VALUE_OR_QUOTE_START if check_initial_quote else TOP_LEVEL_VALUE_START
+                match = pattern.search(self.json_str, self.index)
+                self.index = match.start() if match else len(self.json_str)
 
     def _resolve_schema_for_parse(
         self,

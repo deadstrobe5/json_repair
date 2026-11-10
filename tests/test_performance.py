@@ -34,6 +34,14 @@ mixed_quote_object_string_fragments = _unclosed_object_string_payload(
 far_quote_comma_object_string_fragments = '{"a": "' + ("x," * 10_000) + '" tail'
 far_quote_brace_object_string_fragments = '{"a": "' + ("x}" * 5_000) + '" tail'
 unclosed_object_string_escaped_newlines = '{"a": "' + ("x\\n" * 5_000)
+long_prose_before_json = (
+    "Let me think about this carefully. The user wants a list of cities, so I will check each one. " * 2_000
+    + '```json\n{"cities": ["Paris", "Lyon"]}\n```'
+)
+parenthesized_prose_lines_before_json = (
+    "".join(f"({i}) Step {i}: check the input and compute the value.\n" for i in range(6_000))
+    + '```json\n{"answer": 42}\n```'
+)
 
 schema_perf = {
     "type": "array",
@@ -174,3 +182,23 @@ def test_schema_repair_performance(
     assert benchmark.stats is not None
     median_time = benchmark.stats.get("median")
     assert median_time < max_time, f"Benchmark exceeded threshold: {median_time:.6f}s > {max_time:.6f}s"
+
+
+@pytest.mark.skipif(CI, reason="Performance tests are skipped in CI")
+def test_long_prose_before_json() -> None:
+    start = time.perf_counter()
+    repair_json(long_prose_before_json, return_objects=True)
+    elapsed = time.perf_counter() - start
+
+    max_time = 10 / 10**3  # 10 millisecond
+    assert elapsed < max_time, f"Performance regression: {elapsed:.3f}s > {max_time:.3f}s"
+
+
+@pytest.mark.skipif(CI, reason="Performance tests are skipped in CI")
+def test_many_parenthesized_prose_lines_before_json() -> None:
+    start = time.perf_counter()
+    repair_json(parenthesized_prose_lines_before_json, return_objects=True)
+    elapsed = time.perf_counter() - start
+
+    max_time = 250 / 10**3  # 250 millisecond
+    assert elapsed < max_time, f"Performance regression: {elapsed:.3f}s > {max_time:.3f}s"
