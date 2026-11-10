@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
@@ -632,16 +633,7 @@ def _handle_right_delimiter_candidate(
                 next_char = _append_literal_char(self, state, char)
                 return True, next_char, False
         elif self.context.current == ContextValues.ARRAY:
-            even_delimiters = next_c == outer_rstring_delimiter
-            while next_c == outer_rstring_delimiter:
-                i = self.skip_to_character(character=[outer_rstring_delimiter, "]"], idx=i + 1)
-                next_c = self.get_char_at(i)
-                if next_c != outer_rstring_delimiter:
-                    even_delimiters = False
-                    break
-                i = self.skip_to_character(character=[outer_rstring_delimiter, "]"], idx=i + 1)
-                next_c = self.get_char_at(i)
-            if even_delimiters:
+            if _array_quotes_pair_up(self, outer_rstring_delimiter, i):
                 self.log(
                     "While parsing a string in Array context, we detected a quoted section that would have closed the string but has a different meaning here, ignoring it",
                 )
@@ -917,6 +909,28 @@ def parse_string(self: "JSONParser") -> JSONReturnType:
 
     char = _scan_string_body(self, state)
     return _finalize_string_result(self, state, char)
+
+
+def _array_quotes_pair_up(self: "JSONParser", delimiter: str, quote_idx: int) -> bool:
+    """Return whether the quotes from ``quote_idx`` up to the next ``]`` come in pairs."""
+    quote_index = self.index + quote_idx
+    scan = self.array_quote_scan
+    # Every quote after quote_index up to the same ] was already found by an earlier scan, so reuse it.
+    # Without this, each quote in a long array of strings rescans to the end of the array.
+    if not (
+        scan is not None and scan[0] is self.json_str and scan[1] == delimiter and scan[2] <= quote_index < scan[3]
+    ):
+        positions = []
+        i = quote_idx
+        while True:
+            i = self.skip_to_character(character=[delimiter, "]"], idx=i + 1)
+            if self.get_char_at(i) != delimiter:
+                break
+            positions.append(self.index + i)
+        scan = (self.json_str, delimiter, quote_index, self.index + i, positions)
+        self.array_quote_scan = scan
+    following_quotes = len(scan[4]) - bisect_right(scan[4], quote_index)
+    return following_quotes % 2 == 1
 
 
 def _only_whitespace_until(self: "JSONParser", end: int) -> bool:

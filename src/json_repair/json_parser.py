@@ -94,6 +94,8 @@ class JSONParser:
         self.has_tried_valid_json_suffix = False
         self._last_parse_found_value = False
         self.schema_repairer: SchemaRepairer | None = None
+        # Quote positions found by the last array-string lookahead, reused by the following quotes.
+        self.array_quote_scan: tuple[str | StringFileWrapper, str, int, int, list[int]] | None = None
 
     def parse(
         self,

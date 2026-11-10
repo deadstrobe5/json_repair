@@ -115,6 +115,17 @@ def test_top_level_parenthesized_value_gate_rejects_prose_and_accepts_standalone
     assert parser.top_level_parenthesized_can_start_value() is True
 
 
+def test_parse_array_inner_quotes_across_items() -> None:
+    assert (
+        repair_json('["he said "hi" to me", "she said "bye" too", "the 12" pipe", "ok"]')
+        == '["he said ", "hi\\" to me\\"", "she said ", "bye\\" too\\"", "the 12", "pipe", "ok"]'
+    )
+    assert (
+        repair_json('{"quotes": ["he said "hi" to me", "the 12" pipe"], "next": ["a "b" c"]}')
+        == '{"quotes": ["he said ", "hi\\" to me\\"", "the 12", "pipe"], "next": ["a \\"b\\" c"]}'
+    )
+
+
 def test_parse_array_missing_quotes() -> None:
     assert repair_json('["value1" value2", "value3"]') == '["value1", "value2", "value3"]'
     assert (
